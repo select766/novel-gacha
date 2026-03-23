@@ -5,10 +5,26 @@ import type { Novel, GenerationGroup } from "@novel-gacha/shared";
 class GenerationQueue {
   private queue: string[] = [];
   private processing = false;
+  private stopped = false;
 
   enqueue(novelIds: string[]): void {
+    if (this.stopped) return;
     this.queue.push(...novelIds);
     this.processNext();
+  }
+
+  /** キューをクリアし処理を停止する（テスト用） */
+  clear(): void {
+    this.stopped = true;
+    this.queue = [];
+    this.processing = false;
+  }
+
+  /** clear後に再度使えるようにする（テスト用） */
+  reset(): void {
+    this.stopped = false;
+    this.queue = [];
+    this.processing = false;
   }
 
   restorePending(): void {
@@ -32,7 +48,7 @@ class GenerationQueue {
   }
 
   private async processNext(): Promise<void> {
-    if (this.processing || this.queue.length === 0) return;
+    if (this.stopped || this.processing || this.queue.length === 0) return;
     this.processing = true;
 
     const novelId = this.queue.shift()!;
@@ -86,6 +102,8 @@ class GenerationQueue {
         options,
       });
 
+      if (this.stopped) return;
+
       // Save result
       db.prepare(
         "UPDATE novels SET content = ?, status = 'completed', completed_at = ? WHERE id = ?"
@@ -93,16 +111,23 @@ class GenerationQueue {
 
       console.log(`Novel ${novelId} completed`);
     } catch (err) {
+      if (this.stopped) return;
       const message = err instanceof Error ? err.message : String(err);
       console.error(`Novel ${novelId} failed:`, message);
-      getDb()
-        .prepare(
-          "UPDATE novels SET status = 'failed', error_message = ? WHERE id = ?"
-        )
-        .run(message, novelId);
+      try {
+        getDb()
+          .prepare(
+            "UPDATE novels SET status = 'failed', error_message = ? WHERE id = ?"
+          )
+          .run(message, novelId);
+      } catch {
+        // DB may be closed during test teardown
+      }
     } finally {
-      this.processing = false;
-      this.processNext();
+      if (!this.stopped) {
+        this.processing = false;
+        this.processNext();
+      }
     }
   }
 }

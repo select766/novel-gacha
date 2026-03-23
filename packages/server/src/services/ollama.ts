@@ -36,17 +36,37 @@ export async function generateText(
   params: OllamaGenerateParams
 ): Promise<OllamaGenerateResult> {
   const url = getOllamaUrl();
-  const res = await fetch(`${url}/api/generate`, {
+
+  // /api/chat を使用（thinkingモデル対応）
+  const messages: { role: string; content: string }[] = [];
+  if (params.system) {
+    messages.push({ role: "system", content: params.system });
+  }
+  messages.push({ role: "user", content: params.prompt });
+
+  const res = await fetch(`${url}/api/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      ...params,
+      model: params.model,
+      messages,
       stream: false,
+      options: params.options,
     }),
   });
   if (!res.ok) {
     const body = await res.text();
-    throw new Error(`Ollama generate error: ${res.status} ${body}`);
+    throw new Error(`Ollama chat error: ${res.status} ${body}`);
   }
-  return res.json() as Promise<OllamaGenerateResult>;
+
+  const data = (await res.json()) as {
+    message?: { content?: string; thinking?: string };
+  };
+  const content = data.message?.content || "";
+  const thinking = data.message?.thinking || "";
+
+  // thinkingモデルの場合、contentが空ならthinkingをフォールバックとして使用
+  const response = content || thinking;
+
+  return { response };
 }

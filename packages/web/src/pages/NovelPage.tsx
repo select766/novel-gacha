@@ -12,11 +12,70 @@ import {
   Center,
   NumberInput,
   Skeleton,
+  Spoiler,
+  Divider,
 } from "@mantine/core";
 import { useQuery } from "@tanstack/react-query";
-import { useUpdateNovel, useGenerate } from "../api/client";
+import { useUpdateNovel, useGenerate, useGroup } from "../api/client";
 import { StarRating } from "../components/StarRating";
 import type { NovelDetail } from "@novel-gacha/shared";
+
+function NavigationBar({
+  groupId,
+  novelId,
+  novels,
+}: {
+  groupId: string;
+  novelId: string;
+  novels: { id: string }[];
+}) {
+  // novels are in created_at DESC order from API, reverse for chronological index
+  const sorted = [...novels].reverse();
+  const currentIndex = sorted.findIndex((n) => n.id === novelId);
+  const prev = currentIndex > 0 ? sorted[currentIndex - 1] : null;
+  const next =
+    currentIndex < sorted.length - 1 ? sorted[currentIndex + 1] : null;
+  const label =
+    currentIndex >= 0
+      ? `#${currentIndex + 1} / ${sorted.length}`
+      : `${sorted.length}件`;
+
+  return (
+    <Group justify="space-between">
+      <div>
+        {prev ? (
+          <Link to={`/novels/${prev.id}`}>
+            <Button variant="light" size="xs">
+              ← 前 #{currentIndex}
+            </Button>
+          </Link>
+        ) : (
+          <Button variant="light" size="xs" disabled>
+            ← 前
+          </Button>
+        )}
+      </div>
+      <Link to={`/groups/${groupId}`}>
+        <Button variant="subtle" size="xs">
+          一覧 ({label})
+        </Button>
+      </Link>
+      <div>
+        {next ? (
+          <Link to={`/novels/${next.id}`}>
+            <Button variant="light" size="xs">
+              次 #{currentIndex + 2} →
+            </Button>
+          </Link>
+        ) : (
+          <Button variant="light" size="xs" disabled>
+            次 →
+          </Button>
+        )}
+      </div>
+    </Group>
+  );
+}
 
 export function NovelPage() {
   const { id } = useParams<{ id: string }>();
@@ -36,6 +95,9 @@ export function NovelPage() {
   });
   const updateNovel = useUpdateNovel();
   const generate = useGenerate();
+
+  // Fetch group to get sibling novels for navigation
+  const { data: groupDetail } = useGroup(novel?.group_id || "");
 
   const [comment, setComment] = useState<string | null>(null);
   const [addCount, setAddCount] = useState<number>(1);
@@ -97,8 +159,17 @@ export function NovelPage() {
     navigate("/");
   };
 
+  const siblings = groupDetail?.novels ?? [];
+
   return (
     <Stack>
+      {/* Navigation (top) */}
+      <NavigationBar
+        groupId={novel.group_id}
+        novelId={novel.id}
+        novels={siblings}
+      />
+
       <Group justify="space-between">
         <Text fw={600} size="xl">
           {novel.group.title}
@@ -114,6 +185,29 @@ export function NovelPage() {
           {new Date(novel.created_at).toLocaleString("ja-JP")}
         </Text>
       </Group>
+
+      {/* Prompt (collapsible) */}
+      <Card padding="xs" radius="md" withBorder bg="gray.0">
+        <Text size="xs" fw={500} c="dimmed" mb={4}>
+          プロンプト
+        </Text>
+        <Spoiler maxHeight={24} showLabel="全文を表示" hideLabel="折りたたむ">
+          <Text size="sm" style={{ whiteSpace: "pre-wrap" }}>
+            {novel.group.prompt}
+          </Text>
+          {novel.group.system_prompt && (
+            <>
+              <Divider my="xs" />
+              <Text size="xs" fw={500} c="dimmed" mb={4}>
+                システムプロンプト
+              </Text>
+              <Text size="sm" style={{ whiteSpace: "pre-wrap" }}>
+                {novel.group.system_prompt}
+              </Text>
+            </>
+          )}
+        </Spoiler>
+      </Card>
 
       {/* Novel content */}
       <Card shadow="sm" padding="lg" radius="md" withBorder>
@@ -182,6 +276,13 @@ export function NovelPage() {
           </Link>
         </Stack>
       </Card>
+
+      {/* Navigation (bottom) */}
+      <NavigationBar
+        groupId={novel.group_id}
+        novelId={novel.id}
+        novels={siblings}
+      />
     </Stack>
   );
 }

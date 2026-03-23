@@ -17,6 +17,19 @@ export function getDb(): Database.Database {
   return db;
 }
 
+/** テスト用: DBインスタンスを外部から差し替える */
+export function setDb(newDb: Database.Database): void {
+  db = newDb;
+}
+
+/** テスト用: インメモリDBを作成して返す */
+export function createTestDb(): Database.Database {
+  const testDb = new Database(":memory:");
+  testDb.pragma("foreign_keys = ON");
+  initSchema(testDb);
+  return testDb;
+}
+
 function initSchema(db: Database.Database): void {
   db.exec(`
     CREATE TABLE IF NOT EXISTS generation_groups (

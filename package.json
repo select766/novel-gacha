@@ -11,6 +11,7 @@
     "dev:server": "npm run dev -w packages/server",
     "dev:web": "npm run dev -w packages/web",
     "dev": "npm run dev:server & npm run dev:web",
+    "dev:lan": "npm run dev:server & npm run dev:lan -w packages/web",
     "build": "npm run build -w packages/shared && npm run build -w packages/server && npm run build -w packages/web"
   }
 }
